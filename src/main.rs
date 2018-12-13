@@ -5,5 +5,6 @@ fn main() {
     println!("Day 1:");
     println!("{}", day1::solve().unwrap());
     println!("Day 2:");
-    println!("{}", day2::solve().unwrap());
+    println!("{}", day2::solve_part1().unwrap());
+    println!("{}", day2::solve_part2().unwrap().unwrap());
 }
