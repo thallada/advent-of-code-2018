@@ -4,13 +4,14 @@ use std::error::Error;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::fmt;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::iter::FromIterator;
 
 use regex::{Regex, Captures};
 
 const INPUT: &str = "inputs/3.txt";
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 struct Claim {
     id: u32,
     left: u32,
@@ -19,7 +20,7 @@ struct Claim {
     height: u32,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 struct Point {
     x: u32,
     y: u32,
@@ -52,14 +53,12 @@ pub fn solve_part1() -> Result<u32, Box<Error>> {
     Ok(count_overlapping_claimed_points(read_claims(INPUT)?))
 }
 
+pub fn solve_part2() -> Result<Option<u32>, Box<Error>> {
+    Ok(find_non_overlapping_claim(read_claims(INPUT)?))
+}
+
 fn count_overlapping_claimed_points(claims: Vec<Claim>) -> u32 {
-    let mut claimed_points: HashMap<Point, u32> = HashMap::new();
-    for claim in claims {
-        for point in list_points_in_claim(claim) {
-            let current_point = claimed_points.get(&point).unwrap_or(&0);
-            claimed_points.insert(point, current_point + 1);
-        }
-    }
+    let claimed_points = get_claimed_points(&claims);
     return claimed_points.values().fold(0, |acc, claims| {
         if claims > &1 {
             return acc + 1
@@ -68,7 +67,31 @@ fn count_overlapping_claimed_points(claims: Vec<Claim>) -> u32 {
     })
 }
 
-fn list_points_in_claim(claim: Claim) -> Vec<Point> {
+fn find_non_overlapping_claim(claims: Vec<Claim>) -> Option<u32> {
+    let claimed_points = get_claimed_points(&claims);
+    for claim in claims {
+        let points = list_points_in_claim(&claim);
+        let non_overlapping = points.iter().all(
+            |point| claimed_points.get(&point).unwrap_or(&0) < &2);
+        if non_overlapping {
+            return Some(claim.id);
+        }
+    }
+    None
+}
+
+fn get_claimed_points(claims: &Vec<Claim>) -> HashMap<Point, u32> {
+    let mut claimed_points: HashMap<Point, u32> = HashMap::new();
+    for claim in claims {
+        for point in list_points_in_claim(&claim) {
+            let current_point = claimed_points.get(&point).unwrap_or(&0);
+            claimed_points.insert(point, current_point + 1);
+        }
+    }
+    claimed_points
+}
+
+fn list_points_in_claim(claim: &Claim) -> Vec<Point> {
     let mut points = Vec::new();
     for x in 0..claim.width {
         for y in 0..claim.height {
@@ -142,7 +165,7 @@ mod tests {
 
     #[test]
     fn lists_points_in_claim() {
-        assert_eq!(list_points_in_claim(Claim { id: 1, left: 0, top: 0, width: 2, height: 2 }),
+        assert_eq!(list_points_in_claim(&Claim { id: 1, left: 0, top: 0, width: 2, height: 2 }),
             vec![
                 Point { x: 0, y: 0 },
                 Point { x: 0, y: 1 },
@@ -160,5 +183,15 @@ mod tests {
             Claim { id: 3, left: 5, top: 5, width: 2, height: 2 },
         ];
         assert_eq!(count_overlapping_claimed_points(test_claims), 4);
+    }
+
+    #[test]
+    fn finds_non_overlapping_claim() {
+        let test_claims = vec![
+            Claim { id: 1, left: 1, top: 3, width: 4, height: 4 },
+            Claim { id: 2, left: 3, top: 1, width: 4, height: 4 },
+            Claim { id: 3, left: 5, top: 5, width: 2, height: 2 },
+        ];
+        assert_eq!(find_non_overlapping_claim(test_claims).unwrap(), 3);
     }
 }
