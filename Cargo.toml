@@ -5,4 +5,5 @@ authors = ["Tyler Hallada <tyler@hallada.net>"]
 edition = "2018"
 
 [dependencies]
+chrono = "0.4"
 regex = "1"
