@@ -6,6 +6,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::fmt;
 use std::collections::{HashMap, HashSet};
+use std::collections::hash_map::Entry;
 use std::iter::FromIterator;
 
 use chrono::prelude::*;
@@ -25,6 +26,16 @@ enum Record {
     Wake {
         time: NaiveDateTime,
     },
+}
+
+impl Record {
+    fn time(&self) -> NaiveDateTime {
+        match *self {
+            Record::Start { time, guard_id: _ } => time,
+            Record::Sleep { time } => time,
+            Record::Wake { time } => time,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -50,35 +61,78 @@ impl Error for MalformedRecord {
     }
 }
 
+pub fn solve_part1() -> Result<u32, Box<Error>> {
+    Ok(get_part1(INPUT)?)
+}
+
+fn get_part1(filename: &str) -> Result<u32, Box<Error>> {
+    let records = read_records(filename)?;
+    let minutes_asleep = minutes_asleep_per_guard(records);
+    let sleepiest_guard = minutes_asleep.iter().max_by_key(|&(_, mins)| mins.len()).unwrap();
+    let sleepiest_minute = mode(sleepiest_guard.1);
+    Ok(sleepiest_guard.0 * sleepiest_minute)
+}
+
+fn mode(numbers: &[u32]) -> u32 {
+    let mut occurences = HashMap::new();
+    for &value in numbers {
+        *occurences.entry(value).or_insert(0) += 1;
+    }
+    occurences
+        .into_iter()
+        .max_by_key(|&(_, count)| count)
+        .map(|(val, _)| val)
+        .unwrap_or(0)
+}
+
+fn minutes_asleep_per_guard(mut records: Vec<Record>) -> HashMap<u32, Vec<u32>> {
+    let mut minutes_asleep: HashMap<u32, Vec<u32>> = HashMap::new();
+    records.sort_by_key(|r| r.time());
+    let mut current_guard = 0;
+    let mut fell_asleep = 0;
+    for record in records {
+        match record {
+            Record::Start { time: _, guard_id } => current_guard = guard_id,
+            Record::Sleep { time } => fell_asleep = time.minute(),
+            Record::Wake { time } => {
+                let mut slept_minutes = (fell_asleep..time.minute()).collect();
+                match minutes_asleep.entry(current_guard) {
+                    Entry::Vacant(e) => { e.insert(slept_minutes); },
+                    Entry::Occupied(mut e) => { e.get_mut().append(&mut slept_minutes); },
+                }
+            }
+        }
+    }
+    minutes_asleep
+}
+
 fn read_records(filename: &str) -> Result<Vec<Record>, Box<Error>> {
     let mut records: Vec<Record> = Vec::new();
     let record_regex =
-        Regex::new(r"\[(?P<timestamp>\d{4}-\d{2}-\d{2}\s\d{2}:\d{2})\]\s(?:(?P<start>Guard #(?P<guard_id>\d+) begins shift)|(?P<sleep>falls asleep)|(?P<wake>wakes up))")?;
+        Regex::new(concat!(
+            r"\[(?P<timestamp>\d{4}-\d{2}-\d{2}\s\d{2}:\d{2})\]\s(?:",
+            r"(?P<start>Guard #(?P<guard_id>\d+) begins shift)|",
+            r"(?P<sleep>falls asleep)|",
+            r"(?P<wake>wakes up))"))?;
     let file = File::open(filename)?;
     for line in BufReader::new(file).lines() {
         match record_regex.captures(&line?) {
             Some(captures) => {
-                println!("{:?}", NaiveDateTime::parse_from_str(
+                let time = NaiveDateTime::parse_from_str(
                     &get_captured_field(&captures, "timestamp")?,
-                    "%Y-%m-%d %H:%M")?);
+                    "%Y-%m-%d %H:%M")?;
                 if has_captured_field(&captures, "start")? {
                     records.push(Record::Start {
-                        time: NaiveDateTime::parse_from_str(
-                            &get_captured_field(&captures, "timestamp")?,
-                            "%Y-%m-%d %H:%M")?,
+                        time: time,
                         guard_id: get_captured_field(&captures, "guard_id")?.parse()?,
                     });
                 } else if has_captured_field(&captures, "sleep")? {
                     records.push(Record::Sleep {
-                        time: NaiveDateTime::parse_from_str(
-                            &get_captured_field(&captures, "timestamp")?,
-                            "%Y-%m-%d %H:%M")?,
+                        time: time,
                     });
                 } else {
                     records.push(Record::Wake {
-                        time: NaiveDateTime::parse_from_str(
-                            &get_captured_field(&captures, "timestamp")?,
-                            "%Y-%m-%d %H:%M")?,
+                        time: time,
                     });
                 }
             },
@@ -202,5 +256,31 @@ mod tests {
                 "Malformed record line, no fields could be found".to_string(),
             ),
         }
+    }
+
+    #[test]
+    fn gets_minutes_asleep_per_guard() {
+        let mut expected: HashMap<u32, Vec<u32>> = HashMap::new();
+        expected.insert(10, vec![5, 6, 7, 8, 9]);
+        assert_eq!(minutes_asleep_per_guard(vec![
+            Record::Sleep {
+                time: NaiveDateTime::parse_from_str(
+                          "1518-11-01 00:05", "%Y-%m-%d %H:%M").unwrap(),
+            },
+            Record::Start {
+                time: NaiveDateTime::parse_from_str(
+                          "1518-11-01 00:00", "%Y-%m-%d %H:%M").unwrap(),
+                guard_id: 10,
+            },
+            Record::Wake {
+                time: NaiveDateTime::parse_from_str(
+                          "1518-11-01 00:10", "%Y-%m-%d %H:%M").unwrap(),
+            },
+        ]), expected);
+    }
+
+    #[test]
+    fn solves_part1() {
+        assert_eq!(get_part1(TEST_INPUT).unwrap(), 240);
     }
 }
