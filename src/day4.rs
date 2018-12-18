@@ -74,7 +74,7 @@ fn get_part1(filename: &str) -> Result<u32, Box<Error>> {
     let minutes_asleep = minutes_asleep_per_guard(records);
     let sleepiest_guard = minutes_asleep.iter().max_by_key(|&(_, mins)| mins.len()).unwrap();
     let sleepiest_minute = mode(sleepiest_guard.1);
-    Ok(sleepiest_guard.0 * sleepiest_minute)
+    Ok(sleepiest_guard.0 * (sleepiest_minute % 60))
 }
 
 fn get_part2(filename: &str) -> Result<u32, Box<Error>> {
@@ -90,7 +90,7 @@ fn get_part2(filename: &str) -> Result<u32, Box<Error>> {
         .iter()
         .max_by_key(|(_, mins)| mins.into_iter().filter(|min| **min == sleepiest_minute).count())
         .unwrap();
-    Ok(sleepiest_guard.0 * sleepiest_minute)
+    Ok(sleepiest_guard.0 * (sleepiest_minute % 60))
 }
 
 fn mode(numbers: &[u32]) -> u32 {
@@ -113,9 +113,19 @@ fn minutes_asleep_per_guard(mut records: Vec<Record>) -> HashMap<u32, Vec<u32>> 
     for record in records {
         match record {
             Record::Start { time: _, guard_id } => current_guard = guard_id,
-            Record::Sleep { time } => fell_asleep = time.minute(),
+            Record::Sleep { time } => {
+                let mut hour = 0;
+                if time.hour() == 0 {
+                    hour = 60
+                }
+                fell_asleep = time.minute() + hour;
+            }
             Record::Wake { time } => {
-                let mut slept_minutes = (fell_asleep..time.minute()).collect();
+                let mut hour = 0;
+                if time.hour() == 0 {
+                    hour = 60
+                }
+                let mut slept_minutes = (fell_asleep..(time.minute() + hour)).collect();
                 match minutes_asleep.entry(current_guard) {
                     Entry::Vacant(e) => { e.insert(slept_minutes); },
                     Entry::Occupied(mut e) => { e.get_mut().append(&mut slept_minutes); },
@@ -281,20 +291,20 @@ mod tests {
     #[test]
     fn gets_minutes_asleep_per_guard() {
         let mut expected: HashMap<u32, Vec<u32>> = HashMap::new();
-        expected.insert(10, vec![5, 6, 7, 8, 9]);
+        expected.insert(10, vec![59, 60, 61, 62, 63, 64]);
         assert_eq!(minutes_asleep_per_guard(vec![
             Record::Sleep {
                 time: NaiveDateTime::parse_from_str(
-                          "1518-11-01 00:05", "%Y-%m-%d %H:%M").unwrap(),
+                          "1518-11-01 23:59", "%Y-%m-%d %H:%M").unwrap(),
             },
             Record::Start {
                 time: NaiveDateTime::parse_from_str(
-                          "1518-11-01 00:00", "%Y-%m-%d %H:%M").unwrap(),
+                          "1518-11-01 23:00", "%Y-%m-%d %H:%M").unwrap(),
                 guard_id: 10,
             },
             Record::Wake {
                 time: NaiveDateTime::parse_from_str(
-                          "1518-11-01 00:10", "%Y-%m-%d %H:%M").unwrap(),
+                          "1518-11-02 00:05", "%Y-%m-%d %H:%M").unwrap(),
             },
         ]), expected);
     }
