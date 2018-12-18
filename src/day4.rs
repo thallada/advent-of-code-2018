@@ -65,11 +65,31 @@ pub fn solve_part1() -> Result<u32, Box<Error>> {
     Ok(get_part1(INPUT)?)
 }
 
+pub fn solve_part2() -> Result<u32, Box<Error>> {
+    Ok(get_part2(INPUT)?)
+}
+
 fn get_part1(filename: &str) -> Result<u32, Box<Error>> {
     let records = read_records(filename)?;
     let minutes_asleep = minutes_asleep_per_guard(records);
     let sleepiest_guard = minutes_asleep.iter().max_by_key(|&(_, mins)| mins.len()).unwrap();
     let sleepiest_minute = mode(sleepiest_guard.1);
+    Ok(sleepiest_guard.0 * sleepiest_minute)
+}
+
+fn get_part2(filename: &str) -> Result<u32, Box<Error>> {
+    let records = read_records(filename)?;
+    let minutes_asleep = minutes_asleep_per_guard(records);
+    let all_mins: Vec<u32> = minutes_asleep
+        .values()
+        .flat_map(|mins| mins.iter())
+        .cloned()
+        .collect();
+    let sleepiest_minute = mode(&all_mins[..]);
+    let sleepiest_guard = minutes_asleep
+        .iter()
+        .max_by_key(|(_, mins)| mins.into_iter().filter(|min| **min == sleepiest_minute).count())
+        .unwrap();
     Ok(sleepiest_guard.0 * sleepiest_minute)
 }
 
@@ -282,5 +302,10 @@ mod tests {
     #[test]
     fn solves_part1() {
         assert_eq!(get_part1(TEST_INPUT).unwrap(), 240);
+    }
+
+    #[test]
+    fn solves_part2() {
+        assert_eq!(get_part2(TEST_INPUT).unwrap(), 4455);
     }
 }
