@@ -3,14 +3,21 @@ extern crate regex;
 use std::error::Error;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
+use std::collections::HashMap;
 
 use regex::Regex;
 
 const INPUT: &str = "inputs/5.txt";
+const UNITS: &str = "abcdefghijklmnopqrstuvwxyz";
 
 pub fn solve_part1() -> Result<usize, Box<Error>> {
     let polymer = read_polymer(INPUT)?;
     Ok(reduce_polymer_completely(polymer).len())
+}
+
+pub fn solve_part2() -> Result<usize, Box<Error>> {
+    let polymer = read_polymer(INPUT)?;
+    Ok(find_shortest_unit_eliminated_polymer(polymer))
 }
 
 fn read_polymer(filename: &str) -> Result<String, Box<Error>> {
@@ -39,6 +46,16 @@ fn reduce_polymer_completely(polymer: String) -> String {
     }
 }
 
+fn find_shortest_unit_eliminated_polymer(polymer: String) -> usize {
+    let mut eliminated_unit_polymers = HashMap::new();
+    for unit in UNITS.chars() {
+        let test_polymer = polymer
+            .replace(unit, "")
+            .replace(unit.to_ascii_uppercase(), "");
+        eliminated_unit_polymers.insert(unit, reduce_polymer_completely(test_polymer).len());
+    }
+    *eliminated_unit_polymers.iter().min_by_key(|&(_, len)| len).unwrap().1
+}
 
 #[cfg(test)]
 mod tests {
@@ -66,5 +83,10 @@ mod tests {
     #[test]
     fn reads_polymer() {
         assert_eq!(read_polymer(TEST_INPUT).unwrap(), "dabAcCaCBAcCcaDA");
+    }
+
+    #[test]
+    fn finds_shortest_unit_eliminated_polymer() {
+        assert_eq!(find_shortest_unit_eliminated_polymer("dabAcCaCBAcCcaDA".to_string()), 4);
     }
 }
