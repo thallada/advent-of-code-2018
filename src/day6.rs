@@ -3,17 +3,26 @@ extern crate regex;
 use std::error::Error;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
-use std::{fmt, mem};
-use std::collections::HashMap;
+use std::fmt;
+use std::collections::{HashMap, HashSet};
 
 use regex::{Regex, Captures};
 
+static ALPHABET: [char; 52] = [
+    'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j',
+    'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't',
+    'u', 'v', 'w', 'x', 'y', 'z',
+    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
+    'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T',
+    'U', 'V', 'W', 'X', 'Y', 'Z',
+];
 const INPUT: &str = "inputs/6.txt";
 
-#[derive(Debug, PartialEq, Copy, Clone)]
+#[derive(Debug, PartialEq, Copy, Clone, Eq, Hash)]
 struct Coordinate {
     x: u32,
     y: u32,
+    letter: char,
 }
 
 #[derive(Debug, PartialEq)]
@@ -33,6 +42,44 @@ enum GridPoint {
         closest_coord: Coordinate,
         closest_dist: u32,
     },
+}
+
+#[derive(Debug, PartialEq)]
+struct Grid {
+    points: Vec<GridPoint>,
+    boundary_coord: Coordinate,
+}
+
+impl fmt::Display for Coordinate {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.letter)
+    }
+}
+
+impl fmt::Display for Grid {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "\n-----")?;
+        for (index, point) in self.points.iter().enumerate() {
+            if index as u32 % (self.boundary_coord.x + 1) == 0 {
+                write!(f, "\n")?;
+            }
+            match point {
+                GridPoint::Unfilled { x: _, y: _ } => { write!(f, "-")?; },
+                GridPoint::Tied { x: _, y: _, closest_dist: _} => {
+                    write!(f, ".")?;
+                },
+                GridPoint::Filled { x, y, closest_coord, closest_dist: _ } => {
+                    if *x == closest_coord.x && *y == closest_coord.y {
+                        write!(f, "#")?;
+                    } else {
+                        write!(f, "{}", closest_coord)?;
+                    }
+                },
+            }
+        }
+        write!(f, "\n-----")?;
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -58,6 +105,15 @@ impl Error for MalformedCoordinate {
     }
 }
 
+pub fn solve_part1() -> Result<u32, Box<Error>> {
+    let coords = read_coordinates(INPUT)?;
+    let boundary_coord = get_boundary_coordinate(&coords);
+    let mut grid = create_grid(boundary_coord);
+    fill_grid(&mut grid, &coords).unwrap();
+    println!("{}", grid);
+    Ok(find_largest_coord_area(grid))
+}
+
 fn read_coordinates(filename: &str) -> Result<Vec<Coordinate>, Box<Error>> {
     let mut records: Vec<Coordinate> = Vec::new();
     lazy_static! {
@@ -65,12 +121,13 @@ fn read_coordinates(filename: &str) -> Result<Vec<Coordinate>, Box<Error>> {
             r"(?P<x>\d+), (?P<y>\d+)").unwrap();
     }
     let file = File::open(filename)?;
-    for line in BufReader::new(file).lines() {
+    for (index, line) in BufReader::new(file).lines().enumerate() {
         match COORDINATE_REGEX.captures(&line?) {
             Some(captures) => {
                 records.push(Coordinate {
                     x: get_captured_field(&captures, "x")?.parse()?,
                     y: get_captured_field(&captures, "y")?.parse()?,
+                    letter: ALPHABET[index],
                 });
             },
             None => return Err(Box::new(MalformedCoordinate {
@@ -90,8 +147,8 @@ fn get_captured_field(captures: &Captures, field: &str) -> Result<String, Box<Er
     }
 }
 
-fn get_boundary_coordinate(coords: Vec<Coordinate>) -> Coordinate {
-    let mut boundary_coord = Coordinate { x: 0, y: 0 };
+fn get_boundary_coordinate(coords: &Vec<Coordinate>) -> Coordinate {
+    let mut boundary_coord = Coordinate { x: 0, y: 0, letter: '+' };
     for coord in coords {
         if coord.x > boundary_coord.x {
             boundary_coord.x = coord.x;
@@ -103,97 +160,109 @@ fn get_boundary_coordinate(coords: Vec<Coordinate>) -> Coordinate {
     boundary_coord
 }
 
-fn create_grid(boundary_coord: Coordinate) -> Vec<GridPoint> {
-    let mut grid = Vec::new();
-    for x in 0..boundary_coord.x + 1 {
-        for y in 0..boundary_coord.y + 1 {
-            grid.push(GridPoint::Unfilled { x, y });
+fn create_grid(boundary_coord: Coordinate) -> Grid {
+    let mut points = Vec::new();
+    for y in 0..boundary_coord.y + 1 {
+        for x in 0..boundary_coord.x + 1 {
+            points.push(GridPoint::Unfilled { x, y });
         }
     }
-    grid
+    Grid { points, boundary_coord }
 }
 
-fn fill_grid(
-    grid: &mut Vec<GridPoint>,
-    coords: Vec<Coordinate>,
-    boundary_coord: Coordinate,
-) -> Result<&mut Vec<GridPoint>, Box<Error>> {
+fn fill_grid<'a>(
+    grid: &'a mut Grid,
+    coords: &'a Vec<Coordinate>,
+) -> Result<&'a mut Grid, Box<Error>> {
     for coord in coords {
-        let start_index = (coord.x * (boundary_coord.y + 1)) + coord.y;
-        fill_grid_with_coordinate(grid, start_index, coord, boundary_coord, 0)?;
+        let start_index = (coord.x * (grid.boundary_coord.y + 1)) + coord.y;
+        fill_grid_with_coordinate(
+            grid,
+            start_index,
+            *coord,
+        )?;
     }
     Ok(grid)
 }
 
 fn fill_grid_with_coordinate(
-    grid: &mut Vec<GridPoint>,
+    grid: &mut Grid,
     index: u32,
     coord: Coordinate,
-    boundary_coord: Coordinate,
-    iterations: u32,
-) -> Result<&mut Vec<GridPoint>, Box<Error>> {
-    if iterations == 10 { return Ok(grid); }
-    println!("index: {}", index);
-    println!("grid: {:?}", grid);
-    let point = &mut grid.get_mut(index as usize).unwrap();
-    match point {
-        GridPoint::Unfilled { x, y } => {
-            grid[index as usize] = GridPoint::Filled {
-                x: *x,
-                y: *y,
-                closest_coord: coord,
-                closest_dist: manhattan_dist(coord.x, coord.y, *x, *y),
-            };
-        },
-        GridPoint::Tied { x, y, closest_dist } |
-            GridPoint::Filled { x, y, closest_coord: _, closest_dist } => {
-            let dist = manhattan_dist(coord.x, coord.y, *x, *y);
-            if dist < *closest_dist {
-                grid[index as usize] = GridPoint::Filled {
-                    x: *x,
-                    y: *y,
+) -> Result<&mut Grid, Box<Error>> {
+    let mut visited_indices = HashSet::new();
+    for point in &mut grid.points {
+        visited_indices.insert(index);
+        match *point {
+            GridPoint::Unfilled { x, y } => {
+                *point = GridPoint::Filled {
+                    x: x,
+                    y: y,
                     closest_coord: coord,
-                    closest_dist: dist,
+                    closest_dist: manhattan_dist(coord.x, coord.y, x, y),
                 };
-            } else if dist == *closest_dist {
-                grid[index as usize] = GridPoint::Tied {
-                    x: *x,
-                    y: *y,
-                    closest_dist: dist,
-                };
-            }
-        },
+            },
+            GridPoint::Tied { x, y, closest_dist } => {
+                let dist = manhattan_dist(coord.x, coord.y, x, y);
+                if dist < closest_dist {
+                    *point = GridPoint::Filled {
+                        x: x,
+                        y: y,
+                        closest_coord: coord,
+                        closest_dist: dist,
+                    };
+                }
+            },
+            GridPoint::Filled { x, y, closest_coord, closest_dist } => {
+                let dist = manhattan_dist(coord.x, coord.y, x, y);
+                if dist < closest_dist {
+                    *point = GridPoint::Filled {
+                        x: x,
+                        y: y,
+                        closest_coord: coord,
+                        closest_dist: dist,
+                    };
+                } else if dist == closest_dist && closest_coord != coord {
+                    *point = GridPoint::Tied {
+                        x: x,
+                        y: y,
+                        closest_dist: dist,
+                    };
+                }
+            },
+        }
     }
-    let row_index = index / (boundary_coord.y + 1);
-    let col_index = index % (boundary_coord.y + 1);
-    println!("row_index: {}", row_index);
-    println!("col_index: {}", col_index);
-    // South
-    if col_index < boundary_coord.y {
-        println!("south: {}", index + 1);
-        fill_grid_with_coordinate(grid, index + 1, coord, boundary_coord, iterations + 1)?;
-    }
-    // North
-    if col_index > 0 {
-        println!("north: {}", index - 1);
-        fill_grid_with_coordinate(grid, index - 1, coord, boundary_coord, iterations + 1)?;
-    }
-    // East
-    if row_index < boundary_coord.x {
-        println!("east: {}", index + (boundary_coord.y + 1));
-        fill_grid_with_coordinate(grid, index + (boundary_coord.y + 1), coord, boundary_coord, iterations + 1)?;
-    }
-    // West
-    if row_index > 0 {
-        println!("west: {}", index - (boundary_coord.y + 1));
-        fill_grid_with_coordinate(grid, index - (boundary_coord.y + 1), coord, boundary_coord, iterations + 1)?;
-    }
-    println!("returning grid");
     Ok(grid)
 }
 
 fn manhattan_dist(x1: u32, y1: u32, x2: u32, y2: u32) -> u32 {
-    ((x2 as i32 - x1 as i32) + (y2 as i32 - y1 as i32)).abs() as u32
+    ((x2 as i32 - x1 as i32).abs() + (y2 as i32 - y1 as i32).abs()) as u32
+}
+
+fn find_largest_coord_area(
+    grid: Grid,
+) -> u32 {
+    let mut point_count = HashMap::new();
+    let mut infinite_coords = HashSet::new();
+    for point in grid.points.iter() {
+        match point {
+            GridPoint::Filled { x, y, closest_coord: coord, closest_dist: _ } => {
+                if *x == 0 || *x == grid.boundary_coord.x ||
+                    *y == 0 || *y == grid.boundary_coord.y {
+                    point_count.remove(coord);
+                    infinite_coords.insert(coord);
+                    continue;
+                }
+                if !infinite_coords.contains(coord) {
+                    let count = point_count.entry(coord).or_insert(0);
+                    *count += 1;
+                }
+            },
+            GridPoint::Unfilled { x: _, y: _ } |
+                GridPoint::Tied { x: _, y: _, closest_dist: _ } => {}
+        }
+    }
+    *point_count.values().max().unwrap_or(&0)
 }
 
 #[cfg(test)]
@@ -208,75 +277,89 @@ mod tests {
             Coordinate {
                 x: 1,
                 y: 1,
+                letter: 'a',
             },
             Coordinate {
                 x: 1,
                 y: 6,
+                letter: 'b',
             },
             Coordinate {
                 x: 8,
                 y: 3,
+                letter: 'c',
             },
             Coordinate {
                 x: 3,
                 y: 4,
+                letter: 'd',
             },
             Coordinate {
                 x: 5,
                 y: 5,
+                letter: 'e',
             },
             Coordinate {
                 x: 8,
                 y: 9,
+                letter: 'f',
             },
         ]);
     }
 
     #[test]
     fn gets_boundary_coordinate() {
-        assert_eq!(get_boundary_coordinate(vec![
+        assert_eq!(get_boundary_coordinate(&vec![
             Coordinate {
                 x: 1,
                 y: 1,
+                letter: 'a',
             },
             Coordinate {
                 x: 5,
                 y: 5,
+                letter: 'b',
             },
             Coordinate {
                 x: 2,
                 y: 7,
+                letter: 'c',
             }
         ]),
             Coordinate {
                 x: 5,
                 y: 7,
+                letter: '+',
             }
         )
     }
 
     #[test]
     fn creates_grid() {
+        let boundary_coord = Coordinate { x: 1, y: 1, letter: '+' };
         assert_eq!(
-            create_grid(Coordinate { x: 1, y: 1 }),
-            vec![
-                GridPoint::Unfilled {
-                    x: 0,
-                    y: 0,
-                },
-                GridPoint::Unfilled {
-                    x: 0,
-                    y: 1,
-                },
-                GridPoint::Unfilled {
-                    x: 1,
-                    y: 0,
-                },
-                GridPoint::Unfilled {
-                    x: 1,
-                    y: 1,
-                },
-            ])
+            create_grid(boundary_coord),
+            Grid {
+                points: vec![
+                    GridPoint::Unfilled {
+                        x: 0,
+                        y: 0,
+                    },
+                    GridPoint::Unfilled {
+                        x: 1,
+                        y: 0,
+                    },
+                    GridPoint::Unfilled {
+                        x: 0,
+                        y: 1,
+                    },
+                    GridPoint::Unfilled {
+                        x: 1,
+                        y: 1,
+                    },
+                ],
+                boundary_coord,
+            })
     }
 
     #[test]
@@ -288,72 +371,94 @@ mod tests {
 
     #[test]
     fn fills_grid_with_one_coord() {
-        let boundary_coord = Coordinate { x: 1, y: 1 };
+        let boundary_coord = Coordinate { x: 1, y: 1, letter: '+' };
         let mut grid = create_grid(boundary_coord);
-        let coord = Coordinate { x: 0, y: 0 };
+        let coord = Coordinate { x: 0, y: 0, letter: 'a' };
         assert_eq!(
-            fill_grid(&mut grid, vec![coord], boundary_coord).unwrap(),
-            &mut vec![
-                GridPoint::Filled {
-                    x: 0,
-                    y: 0,
-                    closest_coord: coord,
-                    closest_dist: 0,
-                },
-                GridPoint::Filled {
-                    x: 0,
-                    y: 1,
-                    closest_coord: coord,
-                    closest_dist: 1,
-                },
-                GridPoint::Filled {
-                    x: 1,
-                    y: 0,
-                    closest_coord: coord,
-                    closest_dist: 1,
-                },
-                GridPoint::Filled {
-                    x: 1,
-                    y: 1,
-                    closest_coord: coord,
-                    closest_dist: 2,
-                },
-            ]
+            fill_grid(&mut grid, &vec![coord]).unwrap(),
+            &mut Grid {
+                points: vec![
+                    GridPoint::Filled {
+                        x: 0,
+                        y: 0,
+                        closest_coord: coord,
+                        closest_dist: 0,
+                    },
+                    GridPoint::Filled {
+                        x: 1,
+                        y: 0,
+                        closest_coord: coord,
+                        closest_dist: 1,
+                    },
+                    GridPoint::Filled {
+                        x: 0,
+                        y: 1,
+                        closest_coord: coord,
+                        closest_dist: 1,
+                    },
+                    GridPoint::Filled {
+                        x: 1,
+                        y: 1,
+                        closest_coord: coord,
+                        closest_dist: 2,
+                    },
+                ],
+                boundary_coord
+            }
         );
     }
 
     #[test]
     fn fills_grid_with_two_coords() {
-        let boundary_coord = Coordinate { x: 1, y: 1 };
+        let boundary_coord = Coordinate { x: 1, y: 1, letter: '+' };
         let mut grid = create_grid(boundary_coord);
-        let coord_a = Coordinate { x: 0, y: 0 };
-        let coord_b = Coordinate { x: 1, y: 1 };
+        let coord_a = Coordinate { x: 0, y: 0, letter: 'a' };
+        let coord_b = Coordinate { x: 1, y: 1, letter: 'b' };
         assert_eq!(
-            fill_grid(&mut grid, vec![coord_a, coord_b], boundary_coord).unwrap(),
-            &mut vec![
-                GridPoint::Filled {
-                    x: 0,
-                    y: 0,
-                    closest_coord: coord_a,
-                    closest_dist: 0,
-                },
-                GridPoint::Tied {
-                    x: 0,
-                    y: 1,
-                    closest_dist: 1,
-                },
-                GridPoint::Tied {
-                    x: 1,
-                    y: 0,
-                    closest_dist: 1,
-                },
-                GridPoint::Filled {
-                    x: 1,
-                    y: 1,
-                    closest_coord: coord_b,
-                    closest_dist: 2,
-                },
-            ]
+            fill_grid(&mut grid, &vec![coord_a, coord_b]).unwrap(),
+            &mut Grid {
+                points: vec![
+                    GridPoint::Filled {
+                        x: 0,
+                        y: 0,
+                        closest_coord: coord_a,
+                        closest_dist: 0,
+                    },
+                    GridPoint::Tied {
+                        x: 1,
+                        y: 0,
+                        closest_dist: 1,
+                    },
+                    GridPoint::Tied {
+                        x: 0,
+                        y: 1,
+                        closest_dist: 1,
+                    },
+                    GridPoint::Filled {
+                        x: 1,
+                        y: 1,
+                        closest_coord: coord_b,
+                        closest_dist: 0,
+                    },
+                ],
+                boundary_coord
+            }
+        );
+    }
+
+    #[test]
+    fn finds_largest_coord_area() {
+        let boundary_coord = Coordinate { x: 2, y: 2, letter: '+' };
+        let mut grid = create_grid(boundary_coord);
+        let coords = vec![
+            Coordinate { x: 0, y: 0, letter: 'a' },
+            Coordinate { x: 2, y: 2, letter: 'b' },
+            Coordinate { x: 1, y: 1, letter: 'c' },
+        ];
+        fill_grid(&mut grid, &coords).unwrap();
+        assert_eq!(
+            find_largest_coord_area(grid),
+            1
         );
     }
 }
