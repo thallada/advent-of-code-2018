@@ -7,6 +7,7 @@ mod day3;
 mod day4;
 mod day5;
 mod day6;
+mod day7;
 
 fn main() {
     // println!("Day 1:");
@@ -24,7 +25,9 @@ fn main() {
     // println!("Day 5:");
     // println!("{}", day5::solve_part1().unwrap());
     // println!("{}", day5::solve_part2().unwrap());
-    println!("Day 6:");
-    println!("{}", day6::solve_part1().unwrap());
-    println!("{}", day6::solve_part2().unwrap());
+    // println!("Day 6:");
+    // println!("{}", day6::solve_part1().unwrap());
+    // println!("{}", day6::solve_part2().unwrap());
+    println!("Day 7:");
+    println!("{}", day7::solve_part1().unwrap());
 }
