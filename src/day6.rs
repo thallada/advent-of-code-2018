@@ -114,6 +114,13 @@ pub fn solve_part1() -> Result<u32, Box<Error>> {
     Ok(find_largest_coord_area(grid))
 }
 
+pub fn solve_part2() -> Result<u32, Box<Error>> {
+    let coords = read_coordinates(INPUT)?;
+    let boundary_coord = get_boundary_coordinate(&coords);
+    let grid = create_grid(boundary_coord);
+    Ok(region_closest_to_coordinates_size(grid, coords))
+}
+
 fn read_coordinates(filename: &str) -> Result<Vec<Coordinate>, Box<Error>> {
     let mut records: Vec<Coordinate> = Vec::new();
     lazy_static! {
@@ -258,11 +265,30 @@ fn find_largest_coord_area(
                     *count += 1;
                 }
             },
-            GridPoint::Unfilled { x: _, y: _ } |
-                GridPoint::Tied { x: _, y: _, closest_dist: _ } => {}
+            _ => ()
         }
     }
     *point_count.values().max().unwrap_or(&0)
+}
+
+fn region_closest_to_coordinates_size(grid: Grid, coords: Vec<Coordinate>) -> u32 {
+    let mut points_in_region = 0;
+    for point in grid.points.iter() {
+        match point {
+            GridPoint::Filled { x, y, closest_coord: _, closest_dist: _ } |
+                GridPoint::Tied { x, y, closest_dist: _ } |
+                GridPoint::Unfilled { x, y } => {
+                let mut sum = 0;
+                for coord in coords.iter() {
+                    sum += manhattan_dist(coord.x, coord.y, *x, *y);
+                }
+                if sum < 10000 {
+                    points_in_region += 1;
+                }
+            }
+        }
+    }
+    points_in_region
 }
 
 #[cfg(test)]
