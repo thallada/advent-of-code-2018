@@ -2,45 +2,22 @@ extern crate regex;
 
 use std::collections::HashMap;
 use std::error::Error;
-use std::fmt;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
+use std::result;
 
 use regex::{Captures, Regex};
 
+type Result<T> = result::Result<T, Box<Error>>;
+
 const INPUT: &str = "inputs/7.txt";
 
-#[derive(Debug, Clone, PartialEq)]
-struct MalformedInstruction {
-    details: String,
-}
-
-impl MalformedInstruction {
-    fn new(msg: &str) -> MalformedInstruction {
-        MalformedInstruction {
-            details: msg.to_string(),
-        }
-    }
-}
-
-impl fmt::Display for MalformedInstruction {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.details)
-    }
-}
-
-impl Error for MalformedInstruction {
-    fn description(&self) -> &str {
-        &self.details
-    }
-}
-
-pub fn solve_part1() -> Result<String, Box<Error>> {
+pub fn solve_part1() -> Result<String> {
     let mut instructions = read_instructions(INPUT)?;
     Ok(get_step_sequence(&mut instructions))
 }
 
-fn read_instructions(filename: &str) -> Result<HashMap<String, Vec<String>>, Box<Error>> {
+fn read_instructions(filename: &str) -> Result<HashMap<String, Vec<String>>> {
     let mut instructions: HashMap<String, Vec<String>> = HashMap::new();
     lazy_static! {
         static ref INSTRUCTION_REGEX: Regex = Regex::new(
@@ -61,24 +38,22 @@ fn read_instructions(filename: &str) -> Result<HashMap<String, Vec<String>>, Box
                 dependencies.push(dependency);
             }
             None => {
-                return Err(Box::new(MalformedInstruction {
-                    details: "Malformed instruction line, no fields could be found".to_string(),
-                }))
+                return Err(From::from(
+                    "Malformed instruction line, no fields could be found",
+                ))
             }
         };
     }
     Ok(instructions)
 }
 
-fn get_captured_field(captures: &Captures, field: &str) -> Result<String, Box<Error>> {
+fn get_captured_field(captures: &Captures, field: &str) -> Result<String> {
     match captures.name(field) {
         Some(capture) => Ok(String::from(capture.as_str())),
-        None => Err(Box::new(MalformedInstruction {
-            details: format!(
-                "Malformed instruction line, field {} could not be found",
-                field
-            ),
-        })),
+        None => Err(From::from(format!(
+            "Malformed instruction line, field {} could not be found",
+            field
+        ))),
     }
 }
 
