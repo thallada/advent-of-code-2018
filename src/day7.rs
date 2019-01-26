@@ -17,8 +17,8 @@ pub fn solve_part1() -> Result<String> {
     Ok(get_step_sequence(&mut instructions))
 }
 
-fn read_instructions(filename: &str) -> Result<HashMap<String, Vec<String>>> {
-    let mut instructions: HashMap<String, Vec<String>> = HashMap::new();
+fn read_instructions(filename: &str) -> Result<HashMap<char, Vec<char>>> {
+    let mut instructions: HashMap<char, Vec<char>> = HashMap::new();
     lazy_static! {
         static ref INSTRUCTION_REGEX: Regex = Regex::new(
             r"Step (?P<dependency>\w) must be finished before step (?P<step>\w) can begin."
@@ -29,10 +29,10 @@ fn read_instructions(filename: &str) -> Result<HashMap<String, Vec<String>>> {
     for line in BufReader::new(file).lines() {
         match INSTRUCTION_REGEX.captures(&line?) {
             Some(captures) => {
-                let step = get_captured_field(&captures, "step")?.parse()?;
-                let dependency: String = get_captured_field(&captures, "dependency")?.parse()?;
+                let step = get_captured_field(&captures, "step")?;
+                let dependency: char = get_captured_field(&captures, "dependency")?;
                 instructions
-                    .entry(dependency.clone())
+                    .entry(dependency)
                     .or_insert_with(Vec::new);
                 let dependencies = instructions.entry(step).or_insert_with(Vec::new);
                 dependencies.push(dependency);
@@ -47,9 +47,15 @@ fn read_instructions(filename: &str) -> Result<HashMap<String, Vec<String>>> {
     Ok(instructions)
 }
 
-fn get_captured_field(captures: &Captures, field: &str) -> Result<String> {
+fn get_captured_field(captures: &Captures, field: &str) -> Result<char> {
     match captures.name(field) {
-        Some(capture) => Ok(String::from(capture.as_str())),
+        Some(capture) => match capture.as_str().chars().next() {
+            Some(letter) => Ok(letter),
+            None => Err(From::from(format!(
+                "Malformed instruction line, field {} not a char",
+                field
+            ))),
+        },
         None => Err(From::from(format!(
             "Malformed instruction line, field {} could not be found",
             field
@@ -57,13 +63,13 @@ fn get_captured_field(captures: &Captures, field: &str) -> Result<String> {
     }
 }
 
-fn get_step_sequence(instructions: &mut HashMap<String, Vec<String>>) -> String {
-    let mut sequence: Vec<String> = Vec::new();
+fn get_step_sequence(instructions: &mut HashMap<char, Vec<char>>) -> String {
+    let mut sequence = String::new();
     loop {
-        let mut available: Vec<String> = instructions
+        let mut available: Vec<char> = instructions
             .iter()
             .filter(|(_, dependencies)| dependencies.is_empty())
-            .map(|(step, _)| step.clone())
+            .map(|(step, _)| *step)
             .collect();
         if available.is_empty() {
             break;
@@ -79,7 +85,7 @@ fn get_step_sequence(instructions: &mut HashMap<String, Vec<String>>) -> String 
         }
         sequence.push(next);
     }
-    sequence.join("")
+    sequence
 }
 
 #[cfg(test)]
@@ -88,41 +94,30 @@ mod tests {
 
     const TEST_INPUT: &str = "inputs/7_test.txt";
 
-    #[test]
-    fn reads_instructions_file() {
-        let expected: HashMap<String, Vec<String>> = [
-            ("A".to_string(), vec!["C".to_string()]),
-            ("F".to_string(), vec!["C".to_string()]),
-            ("C".to_string(), vec![]),
-            ("B".to_string(), vec!["A".to_string()]),
-            ("D".to_string(), vec!["A".to_string()]),
+    fn test_instructions() -> HashMap<char, Vec<char>> {
+        [
+            ('A', vec!['C']),
+            ('F', vec!['C']),
+            ('C', vec![]),
+            ('B', vec!['A']),
+            ('D', vec!['A']),
             (
-                "E".to_string(),
-                vec!["B".to_string(), "D".to_string(), "F".to_string()],
+                'E',
+                vec!['B', 'D', 'F'],
             ),
         ]
         .iter()
         .cloned()
-        .collect();
-        assert_eq!(read_instructions(TEST_INPUT).unwrap(), expected);
+        .collect()
+    }
+
+    #[test]
+    fn reads_instructions_file() {
+        assert_eq!(read_instructions(TEST_INPUT).unwrap(), test_instructions());
     }
 
     #[test]
     fn gets_step_sequence() {
-        let mut instructions: HashMap<String, Vec<String>> = [
-            ("A".to_string(), vec!["C".to_string()]),
-            ("F".to_string(), vec!["C".to_string()]),
-            ("C".to_string(), vec![]),
-            ("B".to_string(), vec!["A".to_string()]),
-            ("D".to_string(), vec!["A".to_string()]),
-            (
-                "E".to_string(),
-                vec!["B".to_string(), "D".to_string(), "F".to_string()],
-            ),
-        ]
-        .iter()
-        .cloned()
-        .collect();
-        assert_eq!(get_step_sequence(&mut instructions), "CABDFE");
+        assert_eq!(get_step_sequence(&mut test_instructions()), "CABDFE");
     }
 }
