@@ -19,10 +19,7 @@ pub fn solve_part2() -> Result<u32> {
 fn read_license(filename: &str) -> Result<Vec<u32>> {
     let license = fs::read_to_string(filename)?;
     let license = license.trim();
-    Ok(license
-        .split(' ')
-        .map(|num| num.parse().unwrap())
-        .collect())
+    Ok(license.split(' ').map(|num| num.parse().unwrap()).collect())
 }
 
 fn sum_metadata(license: &[u32], mut index: usize, mut sum_acc: u32) -> (u32, usize) {
@@ -63,7 +60,6 @@ fn sum_metadata_with_indices(license: &[u32], mut index: usize) -> (u32, usize) 
                 .map(|num| *child_sums.get(*num as usize - 1).unwrap_or(&0))
                 .sum();
             index += num_metadata as usize;
-
         }
     } else if num_metadata != 0 {
         sum = license[index..index + num_metadata as usize].iter().sum();
