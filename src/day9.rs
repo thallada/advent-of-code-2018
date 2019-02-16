@@ -5,6 +5,7 @@ use std::fmt;
 use std::fs;
 use std::result;
 use std::str::FromStr;
+use std::collections::VecDeque;
 
 use regex::Regex;
 
@@ -47,8 +48,7 @@ impl FromStr for GameParameters {
 #[derive(Debug, PartialEq)]
 struct GameState {
     turn: Option<usize>,
-    circle: Vec<usize>,
-    current_marble_index: usize,
+    circle: VecDeque<usize>,
     current_marble: usize,
     player_scores: Vec<usize>,
 }
@@ -57,10 +57,25 @@ impl GameState {
     fn new(parameters: GameParameters) -> GameState {
         GameState {
             turn: None,
-            circle: vec![0],
-            current_marble_index: 0,
+            circle: VecDeque::from(vec![0]),
             current_marble: 0,
             player_scores: vec![0; parameters.players as usize],
+        }
+    }
+
+    fn rotate_clockwise(&mut self, steps: usize) {
+        for _ in 0..steps {
+            if let Some(marble) = self.circle.pop_back() {
+                self.circle.push_front(marble);
+            }
+        }
+    }
+
+    fn rotate_counter_clockwise(&mut self, steps: usize) {
+        for _ in 0..steps {
+            if let Some(marble) = self.circle.pop_front() {
+                self.circle.push_back(marble);
+            }
         }
     }
 
@@ -81,33 +96,19 @@ impl GameState {
 
     fn place_next_marble(&mut self) {
         self.current_marble += 1;
-        if self.current_marble_index == self.circle.len() - 1 {
-            self.current_marble_index = 1;
-            self.circle
-                .insert(self.current_marble_index, self.current_marble);
-        } else {
-            self.current_marble_index += 2;
-            self.circle
-                .insert(self.current_marble_index, self.current_marble);
-        }
+        self.rotate_counter_clockwise(1);
+        self.circle.push_back(self.current_marble);
     }
 
     fn place_23rd_marble(&mut self) {
         self.current_marble += 1;
 
-        let mut remove_marble_index: i32 = self.current_marble_index as i32 - 7;
-        if remove_marble_index < 0 {
-            remove_marble_index += self.circle.len() as i32;
+        self.player_scores[self.turn.unwrap()] += self.current_marble;
+        self.rotate_clockwise(7);
+        if let Some(marble) = self.circle.pop_back() {
+            self.player_scores[self.turn.unwrap()] += marble;
         }
-        let removed_marble = self.circle.remove(remove_marble_index as usize);
-
-        self.player_scores[self.turn.unwrap()] += removed_marble + self.current_marble;
-
-        let mut new_current_mable_index: i32 = self.current_marble_index as i32 - 7;
-        if new_current_mable_index < 0 {
-            new_current_mable_index += self.circle.len() as i32 + 1;
-        }
-        self.current_marble_index = new_current_mable_index as usize;
+        self.rotate_counter_clockwise(1);
     }
 
     fn highest_score(&mut self) -> usize {
@@ -122,7 +123,7 @@ impl fmt::Display for GameState {
             Some(turn) => write!(f, "[{}] ", turn + 1)?,
         }
         for (index, marble) in self.circle.iter().enumerate() {
-            if index == self.current_marble_index {
+            if index == self.circle.len() - 1 {
                 write!(f, "({}) ", marble)?;
             } else {
                 write!(f, "{} ", marble)?;
@@ -134,6 +135,12 @@ impl fmt::Display for GameState {
 
 pub fn solve_part1() -> Result<usize> {
     let game_params = read_game_parameters(INPUT)?;
+    Ok(get_highest_score_for_game(game_params))
+}
+
+pub fn solve_part2() -> Result<usize> {
+    let mut game_params = read_game_parameters(INPUT)?;
+    game_params.last_marble *= 100;
     Ok(get_highest_score_for_game(game_params))
 }
 
