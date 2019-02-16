@@ -11,6 +11,11 @@ pub fn solve_part1() -> Result<u32> {
     Ok(sum_metadata(&license, 0, 0).0)
 }
 
+pub fn solve_part2() -> Result<u32> {
+    let license = read_license(INPUT)?;
+    Ok(sum_metadata_with_indices(&license, 0).0)
+}
+
 fn read_license(filename: &str) -> Result<Vec<u32>> {
     let license = fs::read_to_string(filename)?;
     let license = license.trim();
@@ -39,6 +44,34 @@ fn sum_metadata(license: &[u32], mut index: usize, mut sum_acc: u32) -> (u32, us
     (sum_acc, index)
 }
 
+fn sum_metadata_with_indices(license: &[u32], mut index: usize) -> (u32, usize) {
+    let mut sum: u32 = 0;
+    let num_children = license[index];
+    let num_metadata = license[index + 1];
+    index += 2;
+    if num_children != 0 {
+        let mut child_sums: Vec<u32> = Vec::new();
+        for _ in 0..num_children {
+            let (child_sum, child_index) = sum_metadata_with_indices(license, index);
+            index = child_index;
+            child_sums.push(child_sum)
+        }
+
+        if num_metadata != 0 {
+            sum = license[index..index + num_metadata as usize]
+                .iter()
+                .map(|num| *child_sums.get(*num as usize - 1).unwrap_or(&0))
+                .sum();
+            index += num_metadata as usize;
+
+        }
+    } else if num_metadata != 0 {
+        sum = license[index..index + num_metadata as usize].iter().sum();
+        index += num_metadata as usize;
+    }
+    (sum, index)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -56,5 +89,10 @@ mod tests {
     #[test]
     fn sums_license_metadata() {
         assert_eq!(sum_metadata(&test_license(), 0, 0).0, 138);
+    }
+
+    #[test]
+    fn sums_license_metadata_with_indices() {
+        assert_eq!(sum_metadata_with_indices(&test_license(), 0).0, 66);
     }
 }

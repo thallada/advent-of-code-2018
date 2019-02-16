@@ -35,5 +35,6 @@ fn main() {
     // println!("{}", day7::solve_part1().unwrap());
     // println!("{}", day7::solve_part2().unwrap());
     println!("Day 8:");
-    println!("{}", day8::solve_part1().unwrap());
+    // println!("{}", day8::solve_part1().unwrap());
+    println!("{}", day8::solve_part2().unwrap());
 }
