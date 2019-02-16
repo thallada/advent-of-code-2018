@@ -10,7 +10,7 @@ use regex::Regex;
 
 type Result<T> = result::Result<T, Box<Error>>;
 
-const INPUT: &str = "inputs/9_test.txt";
+const INPUT: &str = "inputs/9.txt";
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct GameParameters {
@@ -65,7 +65,6 @@ impl GameState {
     }
 
     fn play_until_marble(&mut self, last_marble: usize) {
-        println!("{}", &self);
         for _ in 0..last_marble {
             self.turn = match self.turn {
                 None => Some(0),
@@ -77,32 +76,38 @@ impl GameState {
             } else {
                 self.place_next_marble();
             }
-            println!("{}", &self);
         }
-        dbg!(&self.player_scores);
     }
 
     fn place_next_marble(&mut self) {
         self.current_marble += 1;
         if self.current_marble_index == self.circle.len() - 1 {
             self.current_marble_index = 1;
-            self.circle.insert(self.current_marble_index, self.current_marble);
+            self.circle
+                .insert(self.current_marble_index, self.current_marble);
         } else {
             self.current_marble_index += 2;
-            self.circle.insert(self.current_marble_index, self.current_marble);
+            self.circle
+                .insert(self.current_marble_index, self.current_marble);
         }
     }
 
     fn place_23rd_marble(&mut self) {
-        println!("23rd marble placed");
         self.current_marble += 1;
 
-        // TODO: handle case where this over-extends over the beginning of the vec
-        let removed_marble = self.circle.remove(self.current_marble_index - 7);
+        let mut remove_marble_index: i32 = self.current_marble_index as i32 - 7;
+        if remove_marble_index < 0 {
+            remove_marble_index += self.circle.len() as i32;
+        }
+        let removed_marble = self.circle.remove(remove_marble_index as usize);
 
         self.player_scores[self.turn.unwrap()] += removed_marble + self.current_marble;
 
-        self.current_marble_index -= 7;
+        let mut new_current_mable_index: i32 = self.current_marble_index as i32 - 7;
+        if new_current_mable_index < 0 {
+            new_current_mable_index += self.circle.len() as i32 + 1;
+        }
+        self.current_marble_index = new_current_mable_index as usize;
     }
 
     fn highest_score(&mut self) -> usize {
@@ -159,7 +164,62 @@ mod tests {
     }
 
     #[test]
-    fn gets_highest_score_for_game() {
+    fn gets_highest_score_for_game1() {
         assert_eq!(get_highest_score_for_game(TEST_GAME_PARAMS), 32);
+    }
+
+    #[test]
+    fn gets_highest_score_for_game2() {
+        assert_eq!(
+            get_highest_score_for_game(GameParameters {
+                players: 10,
+                last_marble: 1618,
+            }),
+            8317
+        );
+    }
+
+    #[test]
+    fn gets_highest_score_for_game3() {
+        assert_eq!(
+            get_highest_score_for_game(GameParameters {
+                players: 13,
+                last_marble: 7999,
+            }),
+            146_373
+        );
+    }
+
+    #[test]
+    fn gets_highest_score_for_game4() {
+        assert_eq!(
+            get_highest_score_for_game(GameParameters {
+                players: 17,
+                last_marble: 1104,
+            }),
+            2764
+        );
+    }
+
+    #[test]
+    fn gets_highest_score_for_game5() {
+        assert_eq!(
+            get_highest_score_for_game(GameParameters {
+                players: 21,
+                last_marble: 6111,
+            }),
+            54718
+        );
+    }
+
+    #[test]
+    fn gets_highest_score_for_game6() {
+        assert_eq!(
+            get_highest_score_for_game(GameParameters {
+                players: 30,
+                last_marble: 5807,
+            }),
+            37305
+        );
     }
 }
