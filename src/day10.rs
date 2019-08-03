@@ -172,30 +172,39 @@ mod tests {
 
     const TEST_INPUT_ONE: &str = "inputs/10_test_one.txt";
     const TEST_INPUT: &str = "inputs/10_test.txt";
-    const TEST_POINT: Point = Point {
+    const TEST_POINT_1: Point = Point {
         position: Vector { x: 0, y: 1 },
+        velocity: Vector { x: 0, y: 0 },
+    };
+    const TEST_POINT_2: Point = Point {
+        position: Vector { x: 0, y: 0 },
         velocity: Vector { x: 0, y: 0 },
     };
     fn test_sky() -> Sky {
         Sky {
-            points: vec![TEST_POINT],
+            points: vec![TEST_POINT_1, TEST_POINT_2],
         }
     }
 
     #[test]
     fn parses_string_to_point() {
         let point = "position=< 0,  1> velocity=< 0,  0>";
-        assert_eq!(point.parse::<Point>().unwrap(), TEST_POINT);
+        assert_eq!(point.parse::<Point>().unwrap(), TEST_POINT_1);
     }
 
     #[test]
     fn reads_points_file() {
-        assert_eq!(read_points_file(TEST_INPUT_ONE).unwrap(), test_sky());
+        assert_eq!(
+            read_points_file(TEST_INPUT_ONE).unwrap(),
+            Sky {
+                points: vec![TEST_POINT_1]
+            }
+        );
     }
 
     #[test]
     fn displays_sky_with_one_point() {
-        assert_eq!(format!("{}", test_sky()), ".\n#\n");
+        assert_eq!(format!("{}", test_sky()), "#\n#\n");
     }
 
     #[test]
