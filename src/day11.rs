@@ -167,8 +167,6 @@ mod tests {
         assert_eq!(grid.power_at_cell(&Coordinate { x: 122, y: 79 }), -5);
         let grid = Grid::new(39);
         assert_eq!(grid.power_at_cell(&Coordinate { x: 217, y: 196 }), 0);
-        let grid = Grid::new(71);
-        assert_eq!(grid.power_at_cell(&Coordinate { x: 101, y: 153 }), 4);
     }
 
     #[test]
