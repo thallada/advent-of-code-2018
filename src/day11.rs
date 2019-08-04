@@ -9,17 +9,14 @@ const INPUT: &str = "inputs/11.txt";
 const GRID_SIZE: usize = 300;
 
 #[derive(Clone)]
-struct Cells([[Option<i8>; GRID_SIZE]; GRID_SIZE]);
+struct Cells([[i32; GRID_SIZE + 1]; GRID_SIZE + 1]);
 
 impl fmt::Display for Cells {
     #[allow(clippy::write_with_newline)]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        for x in 0..GRID_SIZE {
-            for y in 0..GRID_SIZE {
-                match self.0[x][y] {
-                    Some(power) => write!(f, "{}", power)?,
-                    None => write!(f, ".")?,
-                }
+        for x in 1..=GRID_SIZE {
+            for y in 1..=GRID_SIZE {
+                write!(f, "{}", self.0[x][y])?;
             }
             write!(f, "\n")?;
         }
@@ -37,7 +34,7 @@ impl fmt::Debug for Cells {
 #[derive(Debug, Clone)]
 struct Grid {
     serial_number: usize,
-    cells: Cells,
+    sums: Cells,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -52,49 +49,60 @@ pub struct Subsection {
     pub size: usize,
 }
 
+impl Subsection {
+    fn top_left(&self) -> Subsection {
+        Subsection {
+            coord: Coordinate {
+                x: self.coord.x - self.size + 1,
+                y: self.coord.y - self.size + 1,
+            },
+            size: self.size,
+        }
+    }
+}
+
 impl Grid {
     fn new(serial_number: usize) -> Grid {
         Grid {
             serial_number,
-            cells: Cells([[None; GRID_SIZE]; GRID_SIZE]),
+            sums: Cells([[0; GRID_SIZE + 1]; GRID_SIZE + 1]),
         }
     }
 
-    fn power_at_cell(&self, coord: &Coordinate) -> i8 {
+    fn power_at_cell(&self, coord: &Coordinate) -> i32 {
         let rack_id = coord.x + 10;
         let mut power_level = rack_id * coord.y;
         power_level += self.serial_number;
         power_level *= rack_id;
         power_level = power_level / 100 % 10;
-        power_level as i8 - 5
+        power_level as i32 - 5
+    }
+
+    fn fill_sums(&mut self) {
+        for x in 1..=GRID_SIZE {
+            for y in 1..=GRID_SIZE {
+                let power = self.power_at_cell(&Coordinate { x, y });
+                self.sums.0[x][y] = power + self.sums.0[x - 1][y] + self.sums.0[x][y - 1]
+                    - self.sums.0[x - 1][y - 1];
+            }
+        }
     }
 
     fn power_of_subsection(&mut self, subsection: &Subsection) -> i32 {
-        let mut power_level: i32 = 0;
         let Subsection { coord, size } = subsection;
-        for x in coord.x..coord.x + size {
-            for y in coord.y..coord.y + size {
-                power_level += i32::from(match self.cells.0[x][y] {
-                    Some(power) => power,
-                    None => {
-                        let power = self.power_at_cell(&Coordinate { x, y });
-                        self.cells.0[x][y] = Some(power);
-                        power
-                    }
-                });
-            }
-        }
-        power_level
+        let &Coordinate { x, y } = coord;
+        self.sums.0[x][y] - self.sums.0[x - size][y] - self.sums.0[x][y - size]
+            + self.sums.0[x - size][y - size]
     }
 
     fn highest_power_subsection(&mut self, size: usize) -> (Subsection, i32) {
         let mut highest_power_subsection = Subsection {
-            coord: Coordinate { x: 0, y: 0 },
+            coord: Coordinate { x: size, y: size },
             size,
         };
         let mut highest_power_level = self.power_of_subsection(&highest_power_subsection);
-        for x in 0..GRID_SIZE - size {
-            for y in 0..GRID_SIZE - size {
+        for x in size..GRID_SIZE {
+            for y in size..GRID_SIZE {
                 let subsection = Subsection {
                     coord: Coordinate { x, y },
                     size,
@@ -109,7 +117,7 @@ impl Grid {
                 }
             }
         }
-        (highest_power_subsection, highest_power_level)
+        (highest_power_subsection.top_left(), highest_power_level)
     }
 }
 
@@ -121,12 +129,14 @@ fn read_serial_number_file(filename: &str) -> Result<usize> {
 pub fn solve_part1() -> Result<Subsection> {
     let serial_number = read_serial_number_file(INPUT)?;
     let mut grid = Grid::new(serial_number);
+    grid.fill_sums();
     Ok(grid.highest_power_subsection(3).0)
 }
 
 pub fn solve_part2() -> Result<Subsection> {
     let serial_number = read_serial_number_file(INPUT)?;
     let mut grid = Grid::new(serial_number);
+    grid.fill_sums();
     let (mut highest_power_subsection, mut highest_power_level) = grid.highest_power_subsection(1);
 
     for size in 2..=GRID_SIZE {
@@ -164,9 +174,10 @@ mod tests {
     #[test]
     fn returns_power_of_subsection() {
         let mut grid = Grid::new(18);
+        grid.fill_sums();
         assert_eq!(
             grid.power_of_subsection(&Subsection {
-                coord: Coordinate { x: 33, y: 45 },
+                coord: Coordinate { x: 35, y: 47 },
                 size: 3
             }),
             29
@@ -176,6 +187,7 @@ mod tests {
     #[test]
     fn returns_highest_power_subsection() {
         let mut grid = Grid::new(18);
+        grid.fill_sums();
         assert_eq!(
             grid.highest_power_subsection(3),
             (
