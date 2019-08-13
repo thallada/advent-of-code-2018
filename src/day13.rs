@@ -48,6 +48,12 @@ struct Track {
     intersections: HashSet<Vector>,
 }
 
+#[derive(Debug, PartialEq)]
+struct Collision {
+    position: Vector,
+    cart_indices: (usize, usize),
+}
+
 impl FromStr for Track {
     type Err = Box<Error>;
 
@@ -87,7 +93,7 @@ impl FromStr for Track {
                     },
                     (col_index, '/') => match bottom_start {
                         Some(start) => match incomplete_circuits.remove(&(start, col_index)) {
-                            Some(top_row) => {
+                            Some(_) => {
                                 turns.insert(
                                     Vector {
                                         x: col_index,
@@ -210,13 +216,18 @@ impl Cart {
 }
 
 impl Track {
-    fn run_tick(&mut self) -> Option<Vector> {
-        let mut cart_positions: HashSet<Vector> = HashSet::new();
-        for cart in self.carts.iter() {
-            cart_positions.insert(cart.position);
+    fn run_tick(&mut self, find_final_cart: bool) -> Option<Vector> {
+        let mut collided_cart_indices = HashSet::new();
+        let mut cart_positions: HashMap<Vector, usize> = HashMap::new();
+        for (index, cart) in self.carts.iter().enumerate() {
+            cart_positions.insert(cart.position, index);
         }
 
-        for cart in self.carts.iter_mut() {
+        for (index, cart) in self.carts.iter_mut().enumerate() {
+            if collided_cart_indices.contains(&index) {
+                continue;
+            }
+
             let Vector { x, y } = cart.position;
             cart_positions.remove(&cart.position);
             cart.position = match cart.direction {
@@ -235,12 +246,27 @@ impl Track {
                 cart.next_turn = (cart.next_turn + 1) % INTER_SEQ.len() as u8;
             }
 
-            if cart_positions.contains(&cart.position) {
-                return Some(cart.position);
+            if let Some(colliding_cart) = cart_positions.get(&cart.position) {
+                if find_final_cart {
+                    collided_cart_indices.insert(index);
+                    collided_cart_indices.insert(*colliding_cart);
+                    cart_positions.remove(&cart.position);
+                    continue;
+                } else {
+                    return Some(cart.position);
+                }
             }
 
-            cart_positions.insert(cart.position);
+            cart_positions.insert(cart.position, index);
         }
+
+        self.carts = self
+            .carts
+            .drain(..)
+            .enumerate()
+            .filter(|(i, _)| !collided_cart_indices.contains(i))
+            .map(|(_, cart)| cart)
+            .collect();
         self.carts.sort_unstable();
         None
     }
@@ -248,9 +274,16 @@ impl Track {
     fn find_first_collision(&mut self) -> Vector {
         let mut collision: Option<Vector> = None;
         while collision.is_none() {
-            collision = self.run_tick();
+            collision = self.run_tick(false);
         }
         collision.unwrap()
+    }
+
+    fn find_last_cart(&mut self) -> &Cart {
+        while self.carts.len() != 1 {
+            self.run_tick(true);
+        }
+        &self.carts[0]
     }
 }
 
@@ -262,6 +295,11 @@ fn read_track(filename: &str) -> Result<Track> {
 pub fn solve_part1() -> Result<Vector> {
     let mut track = read_track(INPUT)?;
     Ok(track.find_first_collision())
+}
+
+pub fn solve_part2() -> Result<Vector> {
+    let mut track = read_track(INPUT)?;
+    Ok(track.find_last_cart().position)
 }
 
 #[cfg(test)]
@@ -326,7 +364,7 @@ mod tests {
         track_after.carts[1].direction = Direction::East;
         track_after.carts[1].next_turn = 1;
         let mut track = test_track();
-        track.run_tick();
+        track.run_tick(false);
         assert_eq!(track, track_after);
     }
 

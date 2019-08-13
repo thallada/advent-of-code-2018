@@ -60,4 +60,6 @@ fn main() {
     println!("Day 13");
     let part1 = day13::solve_part1().unwrap();
     println!("{},{}", part1.x, part1.y);
+    let part2 = day13::solve_part2().unwrap();
+    println!("{},{}", part2.x, part2.y);
 }
